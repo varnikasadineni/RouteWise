@@ -19,9 +19,9 @@ export default function DatabasePage() {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState("");
   const [refreshed, setRefreshed] = useState("");
-  const [route, setRoute] = useState("R-B");
-  const [result, setResult] = useState<{ title: string; sql: string; rows: Record<string, unknown>[] } | null>(null);
-  const [runError, setRunError] = useState("");
+  const [me, setMe] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [accountMsg, setAccountMsg] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -33,16 +33,17 @@ export default function DatabasePage() {
   }, []);
 
   useEffect(() => { load(); const t = setInterval(load, REFRESH_MS); return () => clearInterval(t); }, [load]);
+  useEffect(() => { fetch("/api/auth/me").then(r => r.json()).then(d => setMe(d.user ? String(d.user.userId) : null)).catch(() => {}); }, []);
 
-  async function run(action: "function" | "procedure") {
-    setRunError(""); setResult(null);
+  async function deleteAccount(u: AppUser) {
+    setAccountMsg(""); setConfirming(null);
     try {
-      const r = await fetch("/api/admin/db-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, routeCode: route }) });
+      const r = await fetch(`/api/admin/users/${u.user_id}`, { method: "DELETE" });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Failed");
-      setResult({ title: action === "function" ? "Function result" : "Procedure result", sql: d.sql, rows: d.rows });
-      load();
-    } catch (e) { setRunError((e as Error).message); }
+      if (!r.ok) throw new Error(d.error || "Delete failed");
+      setAccountMsg(`Deleted ${u.full_name} (${u.role}). Their delay reports are kept with no reporter.`);
+    } catch (e) { setAccountMsg((e as Error).message); }
+    load();
   }
 
   const header = <header className="top"><div><div className="brand">Route<span>Wise</span></div><div className="tag">Database administration</div></div><nav className="nav"><a href="/">Journey planner</a><a href="/dashboard">Delay dashboard</a><a href="/report-delay">Report a delay</a><a href="/admin">Manage</a><AuthLink /></nav></header>;
@@ -58,15 +59,13 @@ export default function DatabasePage() {
 
     <section className="card dbsec">
       <h2>Application accounts <span className="muted">(users table)</span></h2>
-      <div className="tablewrap"><table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>App role</th><th>Delay reports</th><th>Created</th></tr></thead><tbody>
-        {data.appUsers.map(u => <tr key={u.user_id}><td>{u.user_id}</td><td>{u.full_name}</td><td>{u.email}</td><td><span className="chip">{u.role}</span></td><td>{u.reports}</td><td>{new Date(u.created_at).toLocaleString()}</td></tr>)}
-      </tbody></table></div>
-    </section>
-
-    <section className="card dbsec">
-      <h2>Database roles <span className="muted">(pg_roles)</span></h2>
-      <div className="tablewrap"><table><thead><tr><th>Role</th><th>Superuser</th><th>Can log in</th><th>Create DB</th><th>Create role</th><th>Member of</th></tr></thead><tbody>
-        {data.roles.map(r => <tr key={r.rolname}><td><strong>{r.rolname}</strong></td><td>{tick(r.rolsuper)}</td><td>{tick(r.rolcanlogin)}</td><td>{tick(r.rolcreatedb)}</td><td>{tick(r.rolcreaterole)}</td><td>{r.member_of.length ? r.member_of.join(", ") : "–"}</td></tr>)}
+      <p className="muted">Admins can delete depot staff and commuter accounts. Admin accounts cannot be deleted here.</p>
+      {accountMsg && <div className="status">{accountMsg}</div>}
+      <div className="tablewrap"><table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>App role</th><th>Delay reports</th><th>Created</th><th></th></tr></thead><tbody>
+        {data.appUsers.map(u => <tr key={u.user_id}><td>{u.user_id}</td><td>{u.full_name}</td><td>{u.email}</td><td><span className="chip">{u.role}</span></td><td>{u.reports}</td><td>{new Date(u.created_at).toLocaleString()}</td>
+          <td style={{ whiteSpace: "nowrap" }}>{u.role === "ADMIN" || String(u.user_id) === me ? <span className="muted">–</span> : confirming === String(u.user_id)
+            ? <><button className="btn" style={{ background: "#a52626" }} onClick={() => deleteAccount(u)}>Confirm delete</button>{" "}<button className="btn" style={{ background: "#5c6878" }} onClick={() => setConfirming(null)}>Cancel</button></>
+            : <button className="btn" style={{ background: "#a52626" }} onClick={() => { setAccountMsg(""); setConfirming(String(u.user_id)); }}>Delete</button>}</td></tr>)}
       </tbody></table></div>
     </section>
 
@@ -81,32 +80,6 @@ export default function DatabasePage() {
             {rows.map(p => <tr key={p.object}><td>{p.object}{p.kind === "view" ? <span className="muted"> (view)</span> : null}</td><td className={p.sel ? "yes" : "no"}>{tick(p.sel)}</td><td className={p.ins ? "yes" : "no"}>{tick(p.ins)}</td><td className={p.upd ? "yes" : "no"}>{tick(p.upd)}</td><td className={p.del ? "yes" : "no"}>{tick(p.del)}</td></tr>)}
           </tbody></table>}
       </div>; })}</div>
-    </section>
-
-    <section className="card dbsec">
-      <h2>Triggers <span className="muted">(information_schema.triggers)</span></h2>
-      <div className="tablewrap"><table><thead><tr><th>Trigger</th><th>Timing</th><th>Events</th><th>Table</th><th>Level</th></tr></thead><tbody>
-        {data.triggers.map(t => <tr key={t.trigger_name + t.table_name}><td><code>{t.trigger_name}</code></td><td><span className={`chip ${t.action_timing === "BEFORE" ? "beforechip" : ""}`}>{t.action_timing}</span></td><td>{t.events}</td><td>{t.table_name}</td><td>{t.action_orientation}</td></tr>)}
-      </tbody></table></div>
-      <p className="muted">Try it: on the Manage page, change a cause to <code>&nbsp; heavy &nbsp; RAIN&nbsp;</code> and set the delay to 20. The BEFORE trigger saves it as &quot;Heavy rain&quot; and stamps the edit time; the AFTER triggers create an alert and add an audit row below.</p>
-    </section>
-
-    <section className="card dbsec">
-      <h2>Functions and procedures <span className="muted">(pg_proc)</span></h2>
-      <div className="tablewrap"><table><thead><tr><th>Name</th><th>Kind</th><th>Arguments</th></tr></thead><tbody>
-        {data.routines.map(r => <tr key={r.name + r.args}><td><code>{r.name}</code></td><td>{r.kind}</td><td><code>{r.args || "–"}</code></td></tr>)}
-      </tbody></table></div>
-      <h3 style={{ marginTop: 18 }}>Run one from the UI</h3>
-      <div className="runrow">
-        <select aria-label="Route" value={route} onChange={e => setRoute(e.target.value)}>{data.routes.map(r => <option key={r.route_code} value={r.route_code}>{r.route_code} · {r.route_name}</option>)}</select>
-        <button className="btn" onClick={() => run("function")}>Run function get_route_delay_stats</button>
-        <button className="btn" onClick={() => run("procedure")}>Call procedure resolve_route_alerts</button>
-      </div>
-      {runError && <div className="status error">{runError}</div>}
-      {result && <div className="status"><strong>{result.title}</strong><pre className="sql">{result.sql}</pre>
-        <table><thead><tr>{Object.keys(result.rows[0] ?? { result: "" }).map(k => <th key={k}>{k}</th>)}</tr></thead><tbody>
-          {result.rows.length ? result.rows.map((row, i) => <tr key={i}>{Object.values(row).map((v, j) => <td key={j}>{String(v)}</td>)}</tr>) : <tr><td>No rows</td></tr>}
-        </tbody></table></div>}
     </section>
 
     <section className="card dbsec">
