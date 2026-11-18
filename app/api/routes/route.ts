@@ -18,7 +18,22 @@ export async function GET(req: NextRequest) {
   if (!Number.isInteger(origin) || !Number.isInteger(destination) || origin <= 0 || destination <= 0)
     return NextResponse.json({ error: "Choose valid origin and destination stops." }, { status: 400 });
   if (origin === destination)
-    return NextResponse.json({ journeys: [{ stops: ["Same starting and destination stop"], routeCodes: [], legs: [], transfers: 0, segmentMinutes: 0, scheduledMinutes: 0, delayMinutes: 0, delayedLegs: [], estimatedMinutes: 0, label: "Same stop" }] });
+    return NextResponse.json({
+      journeys: [
+        {
+          stops: ["Same starting and destination stop"],
+          routeCodes: [],
+          legs: [],
+          transfers: 0,
+          segmentMinutes: 0,
+          scheduledMinutes: 0,
+          delayMinutes: 0,
+          delayedLegs: [],
+          estimatedMinutes: 0,
+          label: "Same stop",
+        },
+      ],
+    });
 
   let session: Session | undefined;
   try {
@@ -31,14 +46,15 @@ export async function GET(req: NextRequest) {
               [r IN rs | r.routeCode] AS routeCodes,
               reduce(total = 0, r IN rs | total + coalesce(r.travelMinutes, 8)) AS segmentMinutes
        LIMIT 200`,
-      { origin: String(origin), destination: String(destination) });
-    const candidates: Candidate[] = result.records.map(rec => ({
+      { origin: String(origin), destination: String(destination) },
+    );
+    const candidates: Candidate[] = result.records.map((rec) => ({
       stops: rec.get("stops") as string[],
       routeCodes: rec.get("routeCodes") as string[],
       segmentMinutes: toNum(rec.get("segmentMinutes")),
     }));
 
-    const routeCodes = [...new Set(candidates.flatMap(c => c.routeCodes))];
+    const routeCodes = [...new Set(candidates.flatMap((c) => c.routeCodes))];
     const liveDelay: Record<string, number> = {};
     if (routeCodes.length) {
       const delays = await pgPool.query(
@@ -49,14 +65,24 @@ export async function GET(req: NextRequest) {
          WHERE r.route_code = ANY($1::text[])
            AND dr.observed_at >= NOW() - make_interval(hours => $2)
          GROUP BY r.route_code`,
-        [routeCodes, LIVE_DELAY_WINDOW_HOURS]);
+        [routeCodes, LIVE_DELAY_WINDOW_HOURS],
+      );
       for (const row of delays.rows) liveDelay[row.route_code] = Number(row.live_delay);
     }
 
-    return NextResponse.json({ journeys: rankJourneys(candidates, liveDelay), liveDelayWindowHours: LIVE_DELAY_WINDOW_HOURS });
+    return NextResponse.json({
+      journeys: rankJourneys(candidates, liveDelay),
+      liveDelayWindowHours: LIVE_DELAY_WINDOW_HOURS,
+    });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Route search failed. Verify Neo4j is running and neo4j/create_graph.cypher has been executed." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "Route search failed. Verify Neo4j is running and neo4j/01_create_graph.cypher has been executed.",
+      },
+      { status: 500 },
+    );
   } finally {
     await session?.close();
   }

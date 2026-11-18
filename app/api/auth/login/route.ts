@@ -1,6 +1,52 @@
-import { NextRequest,NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { pgPool } from "@/lib/db";
-import { createSession,sessionCookieName } from "@/lib/auth";
-export const runtime="nodejs";
-export async function POST(req:NextRequest){let body;try{body=await req.json();}catch{return NextResponse.json({error:"Invalid request."},{status:400});}const email=String(body.email||"").trim().toLowerCase();const password=String(body.password||"");if(!email||!password)return NextResponse.json({error:"Email and password are required."},{status:400});try{const result=await pgPool.query("SELECT user_id,full_name,email,password_hash,role FROM users WHERE lower(email)=lower($1)",[email]);if(!result.rowCount||!(await bcrypt.compare(password,result.rows[0].password_hash)))return NextResponse.json({error:"Invalid email or password."},{status:401});const u=result.rows[0];const token=await createSession({userId:Number(u.user_id),name:u.full_name,email:u.email,role:u.role});const response=NextResponse.json({ok:true,user:{name:u.full_name,email:u.email,role:u.role}});response.cookies.set(sessionCookieName,token,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:8*60*60});return response;}catch(e){console.error(e);return NextResponse.json({error:"Login failed. Check database and SESSION_SECRET configuration."},{status:500});}}
+import { createSession, sessionCookieName } from "@/lib/auth";
+export const runtime = "nodejs";
+export async function POST(req: NextRequest) {
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+  const email = String(body.email || "")
+    .trim()
+    .toLowerCase();
+  const password = String(body.password || "");
+  if (!email || !password)
+    return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
+  try {
+    const result = await pgPool.query(
+      "SELECT user_id,full_name,email,password_hash,role FROM users WHERE lower(email)=lower($1)",
+      [email],
+    );
+    if (!result.rowCount || !(await bcrypt.compare(password, result.rows[0].password_hash)))
+      return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+    const u = result.rows[0];
+    const token = await createSession({
+      userId: Number(u.user_id),
+      name: u.full_name,
+      email: u.email,
+      role: u.role,
+    });
+    const response = NextResponse.json({
+      ok: true,
+      user: { name: u.full_name, email: u.email, role: u.role },
+    });
+    response.cookies.set(sessionCookieName, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 8 * 60 * 60,
+    });
+    return response;
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json(
+      { error: "Login failed. Check database and SESSION_SECRET configuration." },
+      { status: 500 },
+    );
+  }
+}

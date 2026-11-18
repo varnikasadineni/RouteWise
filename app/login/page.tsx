@@ -1,3 +1,81 @@
 "use client";
-import {useState} from "react";
-export default function Login(){const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [message,setMessage]=useState("");const [busy,setBusy]=useState(false);async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setMessage("");try{const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Login failed");setMessage(`Signed in as ${d.user.role}. Redirecting…`);window.location.href=d.user.role==="COMMUTER"?"/":"/dashboard";}catch(e){setMessage(e instanceof Error?e.message:"Login failed");}finally{setBusy(false);}}return <main className="shell"><header className="top"><div><div className="brand">Route<span>Wise</span></div><div className="tag">Sign in to RouteWise</div></div><nav className="nav"><a href="/">Journey planner</a><a href="/register">Create account</a></nav></header><section className="card" style={{maxWidth:520,margin:"30px auto"}}><h1>Welcome back</h1><p className="muted">Staff accounts must be created by a project administrator using the provided script.</p><form onSubmit={submit}><div className="field"><label htmlFor="email">Email</label><input id="email" type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required /></div><div className="field"><label htmlFor="password">Password</label><input id="password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required /></div><button className="btn" disabled={busy}>{busy?"Signing in…":"Sign in"}</button></form>{message&&<div className="status">{message}</div>}<p className="muted">New commuter? <a href="/register">Create an account</a>.</p></section></main>}
+import { useState } from "react";
+export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMessage("");
+    try {
+      const r = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Login failed");
+      setMessage(`Signed in as ${d.user.role}. Redirecting…`);
+      window.location.href = d.user.role === "COMMUTER" ? "/" : "/dashboard";
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Login failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="shell">
+      <header className="top">
+        <div>
+          <div className="brand">
+            Route<span>Wise</span>
+          </div>
+          <div className="tag">Sign in to RouteWise</div>
+        </div>
+        <nav className="nav">
+          <a href="/">Journey planner</a>
+          <a href="/register">Create account</a>
+        </nav>
+      </header>
+      <section className="card" style={{ maxWidth: 520, margin: "30px auto" }}>
+        <h1>Welcome back</h1>
+        <p className="muted">
+          Staff accounts must be created by a project administrator using the provided script.
+        </p>
+        <form onSubmit={submit}>
+          <div className="field">
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <button className="btn" disabled={busy}>
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+        {message && <div className="status">{message}</div>}
+        <p className="muted">
+          New commuter? <a href="/register">Create an account</a>.
+        </p>
+      </section>
+    </main>
+  );
+}

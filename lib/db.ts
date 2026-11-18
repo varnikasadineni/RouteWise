@@ -1,6 +1,11 @@
 import { Pool } from "pg";
 const globalForPg = globalThis as unknown as { pgPool?: Pool };
-export const pgPool = globalForPg.pgPool ?? new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.PGSSL === "true" ? { rejectUnauthorized: false } : undefined });
+export const pgPool =
+  globalForPg.pgPool ??
+  new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.PGSSL === "true" ? { rejectUnauthorized: false } : undefined,
+  });
 if (process.env.NODE_ENV !== "production") globalForPg.pgPool = pgPool;
 
 import type { PoolClient } from "pg";

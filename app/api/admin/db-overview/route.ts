@@ -7,7 +7,11 @@ export const dynamic = "force-dynamic";
 // ADMIN only. Everything here is read live from PostgreSQL's system catalog,
 // so any role, grant, trigger or routine added in psql shows up on the next refresh.
 export async function GET() {
-  if (!(await requireRole("ADMIN"))) return NextResponse.json({ error: "Only an admin can view database users and privileges." }, { status: 403 });
+  if (!(await requireRole("ADMIN")))
+    return NextResponse.json(
+      { error: "Only an admin can view database users and privileges." },
+      { status: 403 },
+    );
   try {
     const [appUsers, roles, privileges, triggers, routines, alerts, audit, routes] = await Promise.all([
       pgPool.query(`
@@ -65,11 +69,23 @@ export async function GET() {
       pgPool.query(`SELECT route_code, route_name FROM routes ORDER BY route_code`),
     ]);
     return NextResponse.json({
-      appUsers: appUsers.rows, roles: roles.rows, privileges: privileges.rows, triggers: triggers.rows,
-      routines: routines.rows, alerts: alerts.rows, audit: audit.rows, routes: routes.rows,
+      appUsers: appUsers.rows,
+      roles: roles.rows,
+      privileges: privileges.rows,
+      triggers: triggers.rows,
+      routines: routines.rows,
+      alerts: alerts.rows,
+      audit: audit.rows,
+      routes: routes.rows,
     });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Could not read the database catalog. Run database/advanced_queries.sql if the audit table is missing." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          "Could not read the database catalog. Run database/01_schema.sql and database/03_routines.sql if the audit table is missing.",
+      },
+      { status: 500 },
+    );
   }
 }

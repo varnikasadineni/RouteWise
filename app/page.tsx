@@ -1,17 +1,178 @@
 "use client";
 import AuthLink from "@/app/AuthLink";
 import { useEffect, useState } from "react";
-type Stop = { stop_id:number; stop_name:string; area:string };
-type Journey = { stops:string[]; routeCodes:string[]; legs:string[]; transfers:number; segmentMinutes:number; scheduledMinutes:number; delayMinutes:number; delayedLegs:{routeCode:string;minutes:number}[]; estimatedMinutes:number; label:string };
+type Stop = { stop_id: number; stop_name: string; area: string };
+type Journey = {
+  stops: string[];
+  routeCodes: string[];
+  legs: string[];
+  transfers: number;
+  segmentMinutes: number;
+  scheduledMinutes: number;
+  delayMinutes: number;
+  delayedLegs: { routeCode: string; minutes: number }[];
+  estimatedMinutes: number;
+  label: string;
+};
 export default function Home() {
- const [stops,setStops]=useState<Stop[]>([]); const [origin,setOrigin]=useState(1); const [destination,setDestination]=useState(5);
- const [journeys,setJourneys]=useState<Journey[]>([]); const [loading,setLoading]=useState(false); const [message,setMessage]=useState("");
- useEffect(()=>{fetch("/api/stops").then(r=>r.json()).then(d=>{if(d.stops){setStops(d.stops);}}).catch(()=>setMessage("Could not load stops. Check database setup and environment variables."));},[]);
- async function search(e:React.FormEvent){e.preventDefault();setLoading(true);setMessage("");setJourneys([]);try{const r=await fetch(`/api/routes?origin=${origin}&destination=${destination}`);const d=await r.json();if(!r.ok)throw new Error(d.error||"Route search failed");setJourneys(d.journeys||[]);if(!d.journeys?.length)setMessage("No route found in the current sample network. Try another pair of stops.");}catch(err){setMessage(err instanceof Error?err.message:"Could not search routes.");}finally{setLoading(false);}}
- return <main className="shell"><header className="top"><div><div className="brand">Route<span>Wise</span></div><div className="tag">Bengaluru bus route planning & delay analytics</div></div><nav className="nav"><a href="/">Journey planner</a><a href="/dashboard">Delay dashboard</a><a href="/report-delay">Report a delay</a><a href="/admin">Manage</a><AuthLink /></nav></header>
- <section className="hero"><div className="eyebrow">A graph-powered transit prototype</div><h1>Find a simpler way across Bengaluru.</h1><p>Explore sample bus journeys ranked by expected travel time, including delays reported in the last 3 hours, then review route-delay trends from the relational database. This college-project prototype uses illustrative data, not live BMTC predictions.</p></section>
- <div className="grid"><section className="card"><h2>Plan a journey</h2><p className="muted">Choose two stops in the sample network. Journeys are ranked by expected time: scheduled segment time, plus 5 minutes per transfer, plus the average delay reported on each route in the last 3 hours.</p><form onSubmit={search}><div className="formgrid"><div className="field"><label htmlFor="origin">Starting stop</label><select id="origin" value={origin} onChange={e=>setOrigin(Number(e.target.value))}>{stops.map(s=><option key={s.stop_id} value={s.stop_id}>{s.stop_name} · {s.area}</option>)}</select></div><div className="field"><label htmlFor="destination">Destination</label><select id="destination" value={destination} onChange={e=>setDestination(Number(e.target.value))}>{stops.map(s=><option key={s.stop_id} value={s.stop_id}>{s.stop_name} · {s.area}</option>)}</select></div></div><button className="btn" disabled={loading||stops.length===0}>{loading?"Searching…":"Find bus journeys"}</button></form>{message&&<div className="status">{message}</div>}
- {journeys.length>0&&<div className="results">{journeys.map((j,i)=><article className="result" key={i}><strong>{i===0?"Recommended journey":`Alternative ${i}`}</strong><div className="chips"><span className="chip">{j.transfers} transfer{j.transfers===1?"":"s"}</span><span className="chip">~{j.estimatedMinutes} min</span><span className="chip">{(j.legs??j.routeCodes).join(" → ")}</span>{j.delayMinutes>0&&<span className="chip delaychip">+{j.delayMinutes} min delay</span>}</div>{j.delayMinutes>0&&<div className="muted">Includes current delays: {j.delayedLegs.map(d=>`${d.routeCode} +${d.minutes} min`).join(", ")} (schedule alone: {j.scheduledMinutes} min)</div>}<div className="stopline">{j.stops.join("  →  ")}</div></article>)}</div>}</section>
- <section className="card"><h2>How RouteWise works</h2><div className="stats"><div className="stat"><strong>2</strong><span>Database paradigms</span></div><div className="stat"><strong>1</strong><span>Transfer-aware planner</span></div><div className="stat"><strong>SQL</strong><span>Delay analytics</span></div></div><h3>PostgreSQL + Neo4j</h3><p className="muted">PostgreSQL stores routes, stops, trips and observed delays. Neo4j models stops as nodes and bus segments as relationships. The API combines the graph paths with SQL delay statistics.</p><p className="muted">The path ranking is a prototype: it does not yet account for exact departure times, service calendars or live traffic.</p></section></div>
- <p className="foot">RouteWise academic prototype · Sample data is illustrative · Not an official BMTC service</p></main>;
+  const [stops, setStops] = useState<Stop[]>([]);
+  const [origin, setOrigin] = useState(1);
+  const [destination, setDestination] = useState(5);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    fetch("/api/stops")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.stops) {
+          setStops(d.stops);
+        }
+      })
+      .catch(() => setMessage("Could not load stops. Check database setup and environment variables."));
+  }, []);
+  async function search(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+    setJourneys([]);
+    try {
+      const r = await fetch(`/api/routes?origin=${origin}&destination=${destination}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Route search failed");
+      setJourneys(d.journeys || []);
+      if (!d.journeys?.length)
+        setMessage("No route found in the current sample network. Try another pair of stops.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not search routes.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <main className="shell">
+      <header className="top">
+        <div>
+          <div className="brand">
+            Route<span>Wise</span>
+          </div>
+          <div className="tag">Bengaluru bus route planning & delay analytics</div>
+        </div>
+        <nav className="nav">
+          <a href="/">Journey planner</a>
+          <a href="/dashboard">Delay dashboard</a>
+          <a href="/report-delay">Report a delay</a>
+          <a href="/admin">Manage</a>
+          <AuthLink />
+        </nav>
+      </header>
+      <section className="hero">
+        <div className="eyebrow">A graph-powered transit prototype</div>
+        <h1>Find a simpler way across Bengaluru.</h1>
+        <p>
+          Explore sample bus journeys ranked by expected travel time, including delays reported in the last 3
+          hours, then review route-delay trends from the relational database. This college-project prototype
+          uses illustrative data, not live BMTC predictions.
+        </p>
+      </section>
+      <div className="grid">
+        <section className="card">
+          <h2>Plan a journey</h2>
+          <p className="muted">
+            Choose two stops in the sample network. Journeys are ranked by expected time: scheduled segment
+            time, plus 5 minutes per transfer, plus the average delay reported on each route in the last 3
+            hours.
+          </p>
+          <form onSubmit={search}>
+            <div className="formgrid">
+              <div className="field">
+                <label htmlFor="origin">Starting stop</label>
+                <select id="origin" value={origin} onChange={(e) => setOrigin(Number(e.target.value))}>
+                  {stops.map((s) => (
+                    <option key={s.stop_id} value={s.stop_id}>
+                      {s.stop_name} · {s.area}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="destination">Destination</label>
+                <select
+                  id="destination"
+                  value={destination}
+                  onChange={(e) => setDestination(Number(e.target.value))}
+                >
+                  {stops.map((s) => (
+                    <option key={s.stop_id} value={s.stop_id}>
+                      {s.stop_name} · {s.area}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <button className="btn" disabled={loading || stops.length === 0}>
+              {loading ? "Searching…" : "Find bus journeys"}
+            </button>
+          </form>
+          {message && <div className="status">{message}</div>}
+          {journeys.length > 0 && (
+            <div className="results">
+              {journeys.map((j, i) => (
+                <article className="result" key={i}>
+                  <strong>{i === 0 ? "Recommended journey" : `Alternative ${i}`}</strong>
+                  <div className="chips">
+                    <span className="chip">
+                      {j.transfers} transfer{j.transfers === 1 ? "" : "s"}
+                    </span>
+                    <span className="chip">~{j.estimatedMinutes} min</span>
+                    <span className="chip">{(j.legs ?? j.routeCodes).join(" → ")}</span>
+                    {j.delayMinutes > 0 && (
+                      <span className="chip delaychip">+{j.delayMinutes} min delay</span>
+                    )}
+                  </div>
+                  {j.delayMinutes > 0 && (
+                    <div className="muted">
+                      Includes current delays:{" "}
+                      {j.delayedLegs.map((d) => `${d.routeCode} +${d.minutes} min`).join(", ")} (schedule
+                      alone: {j.scheduledMinutes} min)
+                    </div>
+                  )}
+                  <div className="stopline">{j.stops.join("  →  ")}</div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="card">
+          <h2>How RouteWise works</h2>
+          <div className="stats">
+            <div className="stat">
+              <strong>2</strong>
+              <span>Database paradigms</span>
+            </div>
+            <div className="stat">
+              <strong>1</strong>
+              <span>Transfer-aware planner</span>
+            </div>
+            <div className="stat">
+              <strong>SQL</strong>
+              <span>Delay analytics</span>
+            </div>
+          </div>
+          <h3>PostgreSQL + Neo4j</h3>
+          <p className="muted">
+            PostgreSQL stores routes, stops, trips and observed delays. Neo4j models stops as nodes and bus
+            segments as relationships. The API combines the graph paths with SQL delay statistics.
+          </p>
+          <p className="muted">
+            The path ranking is a prototype: it does not yet account for exact departure times, service
+            calendars or live traffic.
+          </p>
+        </section>
+      </div>
+      <p className="foot">
+        RouteWise academic prototype · Sample data is illustrative · Not an official BMTC service
+      </p>
+    </main>
+  );
 }
