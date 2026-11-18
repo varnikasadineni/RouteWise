@@ -1,5 +1,11 @@
-// Illustrative RouteWise sample graph. IDs must match PostgreSQL stops.stop_id.
-// Run in Neo4j Browser against the configured database.
+// =====================================================================
+// 01_create_graph.cypher  -  builds the RouteWise stop network in Neo4j
+// Run in Neo4j Browser (Connect -> Query) against the configured database.
+// It first deletes every node, so it can be re-run to reset the graph.
+//   15 :Stop nodes        stopId = PostgreSQL stops.stop_id (shared key)
+//   19 :SEGMENT edges     routeCode = PostgreSQL routes.route_code, travelMinutes
+//   index stop_id_index on :Stop(stopId)
+// =====================================================================
 MATCH (n) DETACH DELETE n;
 CREATE
  (s1:Stop {stopId:'1', name:'Majestic', area:'Gandhinagar'}),
