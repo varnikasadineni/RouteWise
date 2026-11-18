@@ -1,0 +1,9 @@
+flowchart TD
+    A[Next.js browser UI] --> B[Next.js API routes]
+    B --> C[(PostgreSQL)]
+    B --> D[(Neo4j)]
+    C --> E[Schedules and delay analytics]
+    D --> F[Graph path candidates]
+    E --> G[Combined route response]
+    F --> G
+    G --> A
