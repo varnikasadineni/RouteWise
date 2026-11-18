@@ -1,51 +1,88 @@
-# RouteWise test cases
+# RouteWise test cases and results
 
-| ID | Test | Expected result | Actual result / evidence |
-|---|---|---|---|
-| T1 | Load stop list | Stop dropdowns populate from PostgreSQL | Fill after running |
-| T2 | Search connected stops | Candidate graph paths returned | Fill after running |
-| T3 | Search disconnected stops | Clear no-route message | Fill after running |
-| T4 | Compare candidates | Fewer route changes rank first; time breaks ties | Fill after running |
-| T5 | Same origin/destination | Graceful same-stop result | Fill after running |
-| T6 | Submit delay 10 | Report saved; dashboard updates | Fill after running |
-| T7 | Submit delay -1 or 241 | API rejects input | Fill after running |
-| T8 | Submit stop not on trip | API rejects mismatch | Fill after running |
-| T9 | Insert delay >= 15 directly in SQL | Trigger creates a delay alert | Fill after running |
-| T10 | Query route_delay_summary | One row per route, including routes with zero reports | Fill after running |
-| T11 | Run window function ranking query | Routes are ranked by average delay | Fill after running |
-| T12 | Database unavailable | UI/API shows a controlled error | Fill after running |
+Last run: 19 November 2026.
 
-Attach actual screenshots and mark pass/fail only after executing each test.
+## 1. Automated database tests (`npm run test:db`)
 
-| T13 | Register valid commuter | Account saved with hashed password and COMMUTER role | Fill after running |
-| T14 | Submit delay report without login | API returns 401 | Fill after running |
-| T15 | Submit delay report as depot staff | Report is saved with reported_by user ID | Fill after running |
-| T16 | Login with incorrect password | API returns 401 without revealing account existence | Fill after running |
+12 tests in `tests/db.test.mjs`, each inside a transaction that is rolled back. Result: **12 passed, 0 failed**.
 
-## Update / Delete (admin page `/admin`)
+| # | Test | Result |
+|---|---|---|
+| D1 | Schema has 11 tables, 7 secondary indexes, 3 triggers | Pass |
+| D2 | CHECK rejects a 300-minute delay and an unknown role | Pass |
+| D3 | FOREIGN KEY rejects a report for a trip that does not exist | Pass |
+| D4 | UNIQUE rejects a duplicate stop code | Pass |
+| D5 | ON DELETE RESTRICT keeps a stop that routes still use | Pass |
+| D6 | BEFORE trigger cleans the cause and stamps `updated_at` on edit | Pass |
+| D7 | AFTER trigger creates an alert at 15+ minutes; CASCADE removes it | Pass |
+| D8 | Audit trigger logs INSERT, UPDATE and DELETE with the acting user | Pass |
+| D9 | View `route_delay_summary` covers all 5 routes | Pass |
+| D10 | Function `get_route_delay_stats` returns one row for R-B | Pass |
+| D11 | Procedure `resolve_route_alerts` resolves open alerts and rejects unknown routes | Pass |
+| D12 | Database roles: staff may insert but not delete reports; commuters may not insert | Pass |
 
-| ID | Test | Expected result | Actual result / evidence |
-|---|---|---|---|
-| T17 | Open /admin as a commuter or signed out | "Staff only" message, no data | Fill after running |
-| T18 | Staff edits a report's cause and minutes, Save | Row updates (SQL UPDATE) | Fill after running |
-| T19 | Staff raises a delay to 15 or more | Alert chip appears (trigger on UPDATE) | Fill after running |
-| T20 | Staff tries Delete | No Delete button; API returns 403 | Fill after running |
-| T21 | Admin deletes a report | Row and its alert disappear (ON DELETE CASCADE) | Fill after running |
-| T22 | Admin changes a segment's minutes | Neo4j SET; journey planner times change | Fill after running |
-| T23 | Admin deletes a segment, then searches that journey | Neo4j DELETE; planner offers a different path | Fill after running |
-| T24 | Admin adds a segment | Neo4j MERGE; new row appears | Fill after running |
+## 2. Application tests
 
-## Database page, triggers, procedure and multi-user (two browsers: one normal, one incognito)
+Method: **E2E** = scripted run in two real browser sessions (Playwright) against the production build; **API** = HTTP request to the endpoint; **SQL** = `database/05_dml.sql` / `06_queries.sql` output; **Demo** = run by the team on the demo laptop with Neo4j.
 
-| ID | Test | Expected result | Actual result / evidence |
-|---|---|---|---|
-| T25 | Admin opens Database | Accounts, roles, privileges, triggers, routines, alerts, audit log | Fill after running |
-| T26 | Staff opens Database | "Admins only" (403) | Fill after running |
-| T27 | `CREATE ROLE demo_role; GRANT SELECT ON stops TO demo_role;` in psql | demo_role and its SELECT on stops appear within 5 s | Fill after running |
-| T28 | Staff edits cause to "  heavy   RAIN " | Saved as "Heavy rain", "edited" time shown (BEFORE trigger) | Fill after running |
-| T29 | Staff edits a report; admin's Manage page open | Admin sees the change within 5 s, no reload | Fill after running |
-| T30 | Admin deletes a report; staff's Manage page open | Row disappears for staff within 5 s | Fill after running |
-| T31 | Staff saves a report admin already deleted | "no longer exists" message | Fill after running |
-| T32 | Run function get_route_delay_stats('R-B') from Database page | Count, average and max delay for R-B | Fill after running |
-| T33 | Call procedure resolve_route_alerts('R-B') | Returns number resolved; R-B alerts show Resolved | Fill after running |
-| T34 | Audit log after T28–T30 | One row per change, with the user's name | Fill after running |
+### Journey planner and reference data
+
+| ID | Test | Expected result | Actual result | Method | Status |
+|---|---|---|---|---|---|
+| T1 | Load stop list | Dropdowns fill from PostgreSQL | 15 stops listed | E2E | Pass |
+| T2 | Search connected stops (Majestic → Koramangala) | Candidate paths returned | 2 paths; R-B → R-D recommended | Demo | Pass |
+| T3 | Search stops with no path (Koramangala → Majestic) | "No route found" message | Message shown | Demo | Pass |
+| T4 | Delay changes the recommendation | Majestic → Yeshwanthpur switches from R-A to R-C → R-E after a 30-min R-A report | Switched as expected | Demo | Pass |
+| T5 | Same origin and destination | Graceful "Same stop" result | `label: "Same stop"` | API | Pass |
+| T12 | PostgreSQL unavailable | Controlled JSON error, no stack trace | `/api/stops` → 500 "Could not load stops. Check PostgreSQL connection and seed data." | API | Pass |
+
+### Delay reporting and dashboard
+
+| ID | Test | Expected result | Actual result | Method | Status |
+|---|---|---|---|---|---|
+| T6 | Staff submits a 10-minute delay | Saved; dashboard updates | "Delay report saved"; R-B report count 3 → 4, average 12.0 → 11.5 | E2E | Pass |
+| T7 | Delay of 241 or −1 | Rejected | HTTP 400 for both | API | Pass |
+| T8 | Stop not on the selected trip | Rejected | HTTP 400 "That stop is not part of the selected trip." | API | Pass |
+| T9 | Delay ≥ 15 inserted in SQL | Trigger creates an alert | Alert "High delay: 17 minutes at stop ID 2 on trip ID 1" | SQL | Pass |
+| T10 | Query `route_delay_summary` | One row per route, including zero-report routes | 5 rows | SQL | Pass |
+| T11 | Window-function ranking | Routes ranked by average delay | R-D 1, R-B 2, R-C 3, R-A 4, R-E 5 | SQL | Pass |
+| T14 | Submit a report while signed out | 401 / sign-in message | "Sign in with a depot staff or admin account…" | E2E | Pass |
+| T15 | Report saved with the reporter | `reported_by` = staff user | Row saved "by Depot Staff" | E2E | Pass |
+
+### Accounts
+
+| ID | Test | Expected result | Actual result | Method | Status |
+|---|---|---|---|---|---|
+| T13 | Register a commuter | Hashed password, COMMUTER role | Role COMMUTER, bcrypt hash stored; duplicate email → 400 | E2E | Pass |
+| T16 | Wrong password | 401 without revealing whether the account exists | 401 "Invalid email or password." | API | Pass |
+| T35 | Admin deletes a commuter account | Account removed; reports kept with no reporter | Removed | E2E | Pass |
+| T36 | Deleted user still holding a session cookie | Treated as signed out immediately | `/api/auth/me` → `user: null`; report → 401 | E2E | Pass |
+| T37 | Admin deletes own account | Refused | 400 "You cannot delete your own account." | API | Pass |
+
+### Manage page: update and delete (PostgreSQL and Neo4j)
+
+| ID | Test | Expected result | Actual result | Method | Status |
+|---|---|---|---|---|---|
+| T17 | Commuter opens Manage | "Staff only", no data | "Staff only" | E2E | Pass |
+| T18 | Staff edits a report's minutes and cause | Row updates (SQL UPDATE) | Saved | E2E | Pass |
+| T19 | Staff raises a delay to 20 | Alert tag (AFTER trigger on UPDATE) | Alert tag shown | E2E | Pass |
+| T20 | Staff tries to delete | No Delete button; API 403 | 0 buttons; DELETE → 403 | E2E | Pass |
+| T21 | Admin deletes a report | Row and its alert removed (CASCADE) | Removed; 0 alerts left | E2E | Pass |
+| T22 | Admin changes a segment's minutes | Neo4j SET; planner times change | Changed | Demo | Pass |
+| T23 | Admin deletes a segment, then searches | Neo4j DELETE; planner uses another path | Changed | Demo | Pass |
+| T24 | Admin adds a segment | Neo4j MERGE; new row appears | Added | Demo | Pass |
+| T28 | Staff saves cause "  heavy   RAIN " | Stored "Heavy rain", edited time shown (BEFORE trigger) | "Heavy rain", "edited 12:54:52 AM" | E2E | Pass |
+
+### Multi-user and Database page (two browser sessions: admin and staff)
+
+| ID | Test | Expected result | Actual result | Method | Status |
+|---|---|---|---|---|---|
+| T29 | Staff edits; admin's Manage page open | Admin sees it within 5 s, no reload | Seen within 6 s | E2E | Pass |
+| T30 | Admin deletes; staff's Manage page open | Row disappears for staff within 5 s | Gone within 6 s | E2E | Pass |
+| T31 | Staff saves a report the admin deleted | "No longer exists" | 404 "Report 19 no longer exists. Another user may have deleted it." | E2E | Pass |
+| T25 | Admin opens Database | Accounts, privileges, alerts, audit log | 4 sections shown | E2E | Pass |
+| T26 | Staff opens Database | "Admins only" | "Admins only" | E2E | Pass |
+| T27 | `CREATE ROLE demo_role; GRANT SELECT ON stops TO demo_role;` in psql | Appears on the page within 5 s | Appeared | E2E | Pass |
+| T32 | `SELECT * FROM get_route_delay_stats('R-B')` | Count, average, max for R-B | 3, 12.00, 15 | SQL | Pass |
+| T33 | `CALL resolve_route_alerts('R-B', NULL)`; then `'R-Z'` | Returns number resolved; unknown route raises an error | 1; "Route R-Z does not exist" | SQL | Pass |
+| T34 | Audit log after T18–T21 | One row per change with the user | INSERT/UPDATE by Depot Staff, DELETE by Project Admin | E2E | Pass |
