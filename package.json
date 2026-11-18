@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:db": "node --test tests/db.test.mjs"
   },
   "dependencies": {
     "neo4j-driver": "^5.28.1",
