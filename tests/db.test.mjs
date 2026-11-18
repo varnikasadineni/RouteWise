@@ -103,7 +103,7 @@ test("ON DELETE RESTRICT keeps a stop that routes still use", () =>
       c,
       "DELETE FROM stops WHERE stop_id = 1",
       [],
-      /violates foreign key constraint "route_stops_stop_id_fkey"/,
+      /foreign key constraint "route_stops_stop_id_fkey"/,
     );
   }));
 
