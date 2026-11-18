@@ -1,4 +1,9 @@
--- Fictional/illustrative sample network for a college prototype, not official BMTC route data.
+-- =====================================================================
+-- 02_seed.sql  -  Sample data (illustrative network inspired by BMTC, not official data)
+-- Run after 01_schema.sql. Safe to run again: ON CONFLICT / NOT EXISTS guards.
+-- 15 stops, 5 routes, 20 route_stops, 4 buses, 7 trips, 28 trip_stop_times, 10 delay reports
+-- =====================================================================
+
 INSERT INTO stops(stop_id,stop_code,stop_name,area,latitude,longitude) VALUES
 (1,'BLR001','Majestic','Gandhinagar',12.9767,77.5713),
 (2,'BLR002','Mantri Square','Malleshwaram',13.0108,77.5700),
