@@ -27,7 +27,10 @@ type Segment = {
 type Stop = { stop_id: number; stop_name: string; area: string };
 
 async function call(url: string, init?: RequestInit) {
-  const r = await fetch(url, { ...init, headers: { "Content-Type": "application/json" } });
+  const r = await fetch(url, {
+    ...init,
+    headers: { "Content-Type": "application/json" },
+  });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || `Request failed (${r.status})`);
   return d;
@@ -39,9 +42,16 @@ export default function Admin() {
   const [reports, setReports] = useState<Report[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [stops, setStops] = useState<Stop[]>([]);
-  const [edits, setEdits] = useState<Record<number, { minutes: number; cause: string }>>({});
+  const [edits, setEdits] = useState<
+    Record<number, { minutes: number; cause: string }>
+  >({});
   const [segEdits, setSegEdits] = useState<Record<string, number>>({});
-  const [newSeg, setNewSeg] = useState({ fromId: "", toId: "", routeCode: "R-D", travelMinutes: 10 });
+  const [newSeg, setNewSeg] = useState({
+    fromName: "",
+    toName: "",
+    routeCode: "R-D",
+    travelMinutes: 10,
+  });
   const [status, setStatus] = useState("");
   const [segStatus, setSegStatus] = useState("");
   const [refreshed, setRefreshed] = useState("");
@@ -50,9 +60,13 @@ export default function Admin() {
   const loadReports = useCallback(async () => {
     try {
       const d = await call("/api/admin/delay-reports");
-      const ids = new Set((d.reports as Report[]).map((r) => String(r.report_id)));
+      const ids = new Set(
+        (d.reports as Report[]).map((r) => String(r.report_id)),
+      );
       setReports(d.reports);
-      setEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => ids.has(k))));
+      setEdits((prev) =>
+        Object.fromEntries(Object.entries(prev).filter(([k]) => ids.has(k))),
+      );
       setRefreshed(new Date().toLocaleTimeString());
     } catch (e) {
       setStatus((e as Error).message);
@@ -63,7 +77,9 @@ export default function Admin() {
       const d = await call("/api/admin/segments");
       const ids = new Set((d.segments as Segment[]).map((s) => s.id));
       setSegments(d.segments);
-      setSegEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => ids.has(k))));
+      setSegEdits((prev) =>
+        Object.fromEntries(Object.entries(prev).filter(([k]) => ids.has(k))),
+      );
     } catch (e) {
       setSegStatus((e as Error).message);
     }
@@ -123,9 +139,16 @@ export default function Admin() {
   async function deleteReport(r: Report) {
     setStatus("");
     try {
-      await call(`/api/admin/delay-reports/${r.report_id}`, { method: "DELETE" });
+      const d = await call(`/api/admin/delay-reports/${r.report_id}`, {
+        method: "DELETE",
+      });
       dropEdit(r.report_id);
-      setStatus(`Report ${r.report_id} deleted.`);
+      const n = Number(d?.cascadedAlerts ?? 0);
+      setStatus(
+        n > 0
+          ? `Report ${r.report_id} deleted. ON DELETE CASCADE also deleted its ${n} alert${n > 1 ? "s" : ""} (see Database page).`
+          : `Report ${r.report_id} deleted. It had no alert, so nothing cascaded.`,
+      );
       loadReports();
     } catch (err) {
       setStatus((err as Error).message);
@@ -155,7 +178,9 @@ export default function Admin() {
   async function deleteSegment(s: Segment) {
     setSegStatus("");
     try {
-      await call(`/api/admin/segments?id=${encodeURIComponent(s.id)}`, { method: "DELETE" });
+      await call(`/api/admin/segments?id=${encodeURIComponent(s.id)}`, {
+        method: "DELETE",
+      });
       setSegStatus(`${s.fromName} → ${s.toName} (${s.routeCode}) deleted.`);
       loadSegments();
     } catch (err) {
@@ -166,8 +191,22 @@ export default function Admin() {
     e.preventDefault();
     setSegStatus("");
     try {
-      await call("/api/admin/segments", { method: "POST", body: JSON.stringify(newSeg) });
-      setSegStatus("Segment saved.");
+      const d = await call("/api/admin/segments", {
+        method: "POST",
+        body: JSON.stringify(newSeg),
+      });
+      const created: string[] = d.newStops ?? [];
+      setSegStatus(
+        `Segment ${d.from} → ${d.to} (${newSeg.routeCode.trim().toUpperCase()}) saved in Neo4j.` +
+          (created.length
+            ? ` New stop${created.length > 1 ? "s" : ""} added to PostgreSQL and Neo4j: ${created.join(", ")}.`
+            : ""),
+      );
+      setNewSeg({ ...newSeg, fromName: "", toName: "" });
+      fetch("/api/stops")
+        .then((r) => r.json())
+        .then((s) => setStops(s.stops || []))
+        .catch(() => {});
       loadSegments();
     } catch (err) {
       setSegStatus((err as Error).message);
@@ -206,9 +245,14 @@ export default function Admin() {
         <section className="card" style={{ maxWidth: 600 }}>
           <h2>Staff only</h2>
           <p className="muted">
-            Sign in with a depot staff or admin account to manage delay reports and the route graph.
+            Sign in with a depot staff or admin account to manage delay reports
+            and the route graph.
           </p>
-          <a className="btn" href="/login" style={{ textDecoration: "none", display: "inline-block" }}>
+          <a
+            className="btn"
+            href="/login"
+            style={{ textDecoration: "none", display: "inline-block" }}
+          >
             Sign in
           </a>
         </section>
@@ -223,10 +267,13 @@ export default function Admin() {
           Signed in as {user.name} · {user.role}
         </div>
         <h1>Update and delete records.</h1>
-        <p className="live">Live · refreshes every 5 s · last {refreshed || "…"}</p>
+        <p className="live">
+          Live · refreshes every 5 s · last {refreshed || "…"}
+        </p>
         <p>
-          Delay reports live in PostgreSQL; route segments live in Neo4j. Depot staff can edit delay reports.
-          Only admins can delete reports or change the route graph.
+          Delay reports live in PostgreSQL; route segments live in Neo4j. Depot
+          staff can edit delay reports. Only admins can delete reports or change
+          the route graph.
         </p>
       </section>
 
@@ -235,9 +282,10 @@ export default function Admin() {
           Delay reports <span className="muted">(PostgreSQL)</span>
         </h2>
         <p className="muted">
-          On save, a BEFORE trigger tidies the cause text and stamps the edit time. AFTER triggers then create
-          an alert for delays of 15 minutes or more and write an audit row. Deleting a report also deletes its
-          alert (ON DELETE CASCADE).
+          On save, a BEFORE trigger tidies the cause text and stamps the edit
+          time. AFTER triggers then create an alert for delays of 15 minutes or
+          more and write an audit row. Deleting a report also deletes its alert
+          (ON DELETE CASCADE).
         </p>
         {status && <div className="status">{status}</div>}
         <div className="tablewrap">
@@ -255,7 +303,10 @@ export default function Admin() {
             </thead>
             <tbody>
               {reports.map((r) => {
-                const e = edits[r.report_id] ?? { minutes: r.delay_minutes, cause: r.cause };
+                const e = edits[r.report_id] ?? {
+                  minutes: r.delay_minutes,
+                  cause: r.cause,
+                };
                 const dirty = !!edits[r.report_id];
                 return (
                   <tr key={r.report_id}>
@@ -266,7 +317,9 @@ export default function Admin() {
                     <td>
                       {r.stop_name}
                       <br />
-                      <span className="muted">{r.reported_by ?? "seed data"}</span>
+                      <span className="muted">
+                        {r.reported_by ?? "seed data"}
+                      </span>
                     </td>
                     <td>
                       <input
@@ -277,7 +330,13 @@ export default function Admin() {
                         value={e.minutes}
                         style={{ width: 80 }}
                         onChange={(ev) =>
-                          setEdits({ ...edits, [r.report_id]: { ...e, minutes: Number(ev.target.value) } })
+                          setEdits({
+                            ...edits,
+                            [r.report_id]: {
+                              ...e,
+                              minutes: Number(ev.target.value),
+                            },
+                          })
                         }
                       />
                     </td>
@@ -287,7 +346,10 @@ export default function Admin() {
                         value={e.cause}
                         maxLength={200}
                         onChange={(ev) =>
-                          setEdits({ ...edits, [r.report_id]: { ...e, cause: ev.target.value } })
+                          setEdits({
+                            ...edits,
+                            [r.report_id]: { ...e, cause: ev.target.value },
+                          })
                         }
                       />
                       {r.updated_at && (
@@ -296,9 +358,15 @@ export default function Admin() {
                         </div>
                       )}
                     </td>
-                    <td>{r.has_alert ? <span className="chip">Alert</span> : "—"}</td>
+                    <td>
+                      {r.has_alert ? <span className="chip">Alert</span> : "—"}
+                    </td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      <button className="btn" disabled={!dirty} onClick={() => saveReport(r)}>
+                      <button
+                        className="btn"
+                        disabled={!dirty}
+                        onClick={() => saveReport(r)}
+                      >
                         Save
                       </button>{" "}
                       {isAdmin && (
@@ -324,8 +392,10 @@ export default function Admin() {
           Route segments <span className="muted">(Neo4j)</span>
         </h2>
         <p className="muted">
-          Each row is a <code>(:Stop)-[:SEGMENT]-&gt;(:Stop)</code> relationship. The journey planner uses
-          these, so changes show up in route search at once.
+          Each row is a <code>(:Stop)-[:SEGMENT]-&gt;(:Stop)</code>{" "}
+          relationship. The journey planner uses these, so changes show up in
+          route search at once. Type any stop name: a new name is added as a
+          stop in PostgreSQL and as a :Stop node in Neo4j.
         </p>
         {segStatus && <div className="status">{segStatus}</div>}
         {isAdmin && (
@@ -333,35 +403,35 @@ export default function Admin() {
             <div className="formgrid">
               <div className="field">
                 <label htmlFor="from">From stop</label>
-                <select
+                <input
                   id="from"
                   required
-                  value={newSeg.fromId}
-                  onChange={(e) => setNewSeg({ ...newSeg, fromId: e.target.value })}
-                >
-                  <option value="">Choose…</option>
-                  {stops.map((s) => (
-                    <option key={s.stop_id} value={String(s.stop_id)}>
-                      {s.stop_name}
-                    </option>
-                  ))}
-                </select>
+                  list="stop-names"
+                  placeholder="Type any stop, e.g. Hebbal"
+                  value={newSeg.fromName}
+                  onChange={(e) =>
+                    setNewSeg({ ...newSeg, fromName: e.target.value })
+                  }
+                />
               </div>
               <div className="field">
                 <label htmlFor="to">To stop</label>
-                <select
+                <input
                   id="to"
                   required
-                  value={newSeg.toId}
-                  onChange={(e) => setNewSeg({ ...newSeg, toId: e.target.value })}
-                >
-                  <option value="">Choose…</option>
+                  list="stop-names"
+                  placeholder="Type any stop, e.g. Silk Board"
+                  value={newSeg.toName}
+                  onChange={(e) =>
+                    setNewSeg({ ...newSeg, toName: e.target.value })
+                  }
+                />
+                {/* suggestions only: any new name is allowed */}
+                <datalist id="stop-names">
                   {stops.map((s) => (
-                    <option key={s.stop_id} value={String(s.stop_id)}>
-                      {s.stop_name}
-                    </option>
+                    <option key={s.stop_id} value={s.stop_name} />
                   ))}
-                </select>
+                </datalist>
               </div>
               <div className="field">
                 <label htmlFor="code">Route code</label>
@@ -369,7 +439,9 @@ export default function Admin() {
                   id="code"
                   required
                   value={newSeg.routeCode}
-                  onChange={(e) => setNewSeg({ ...newSeg, routeCode: e.target.value })}
+                  onChange={(e) =>
+                    setNewSeg({ ...newSeg, routeCode: e.target.value })
+                  }
                 />
               </div>
               <div className="field">
@@ -381,7 +453,12 @@ export default function Admin() {
                   max={180}
                   required
                   value={newSeg.travelMinutes}
-                  onChange={(e) => setNewSeg({ ...newSeg, travelMinutes: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setNewSeg({
+                      ...newSeg,
+                      travelMinutes: Number(e.target.value),
+                    })
+                  }
                 />
               </div>
             </div>
@@ -418,7 +495,12 @@ export default function Admin() {
                           max={180}
                           value={m}
                           style={{ width: 80 }}
-                          onChange={(e) => setSegEdits({ ...segEdits, [s.id]: Number(e.target.value) })}
+                          onChange={(e) =>
+                            setSegEdits({
+                              ...segEdits,
+                              [s.id]: Number(e.target.value),
+                            })
+                          }
                         />
                       ) : (
                         m
@@ -451,7 +533,9 @@ export default function Admin() {
           </table>
         </div>
       </section>
-      <p className="foot">RouteWise academic prototype · Sample data is illustrative</p>
+      <p className="foot">
+        RouteWise academic prototype · Sample data is illustrative
+      </p>
     </main>
   );
 }
